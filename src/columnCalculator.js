@@ -1,87 +1,96 @@
 import { isString } from './helpers/variableType';
 
 function buildColumnWidths(columns, availableWidth) {
-	let autoColumns = [];
-	let autoMin = 0;
-	let autoMax = 0;
-	let starColumns = [];
-	let starMaxMin = 0;
-	let starMaxMax = 0;
-	let fixedColumns = [];
-	let initial_availableWidth = availableWidth;
+  var autoColumns = [];
+  var autoMin = 0;
+  var autoMax = 0;
+  var starColumns = [];
+  var starAutoColumns = [];
+  var starAutoColWidth = 0;
+  var starMaxMin = 0;
+  var starMaxMax = 0;
+  var fixedColumns = [];
+  var initial_availableWidth = availableWidth;
+  columns.forEach(function (column) {
+    if (isAutoColumn(column)) {
+      autoColumns.push(column);
+      autoMin += column._minWidth;
+      autoMax += column._maxWidth;
+    } else if (isStarColumn(column)) {
+      starColumns.push(column);
+      starMaxMin = Math.max(starMaxMin, column._minWidth);
+      starMaxMax = Math.max(starMaxMax, column._maxWidth);
+    } else if (isStarAutoColumn(column)) {
+	  starAutoColumns.push(column);
+    } else {
+      fixedColumns.push(column);
+    }
+	starAutoColWidth += column._minWidth;
+  });
+  
+  starAutoColumns.forEach(function (column) {
+	column._calcWidth = initial_availableWidth*(column._minWidth/starAutoColWidth);
+  });  
+  fixedColumns.forEach(function (col) {
+    // width specified as %
+    if (Object(variableType["g" /* isString */])(col.width) && /\d+%/.test(col.width)) {
+      col.width = parseFloat(col.width) * initial_availableWidth / 100;
+    }
 
-	columns.forEach(column => {
-		if (isAutoColumn(column)) {
-			autoColumns.push(column);
-			autoMin += column._minWidth;
-			autoMax += column._maxWidth;
-		} else if (isStarColumn(column)) {
-			starColumns.push(column);
-			starMaxMin = Math.max(starMaxMin, column._minWidth);
-			starMaxMax = Math.max(starMaxMax, column._maxWidth);
-		} else {
-			fixedColumns.push(column);
-		}
-	});
+    if (col.width < col._minWidth && col.elasticWidth) {
+      col._calcWidth = col._minWidth;
+    } else {
+      col._calcWidth = col.width;
+    }
 
-	fixedColumns.forEach(col => {
-		// width specified as %
-		if (isString(col.width) && /\d+%/.test(col.width)) {
-			col.width = parseFloat(col.width) * initial_availableWidth / 100;
-		}
-		if (col.width < (col._minWidth) && col.elasticWidth) {
-			col._calcWidth = col._minWidth;
-		} else {
-			col._calcWidth = col.width;
-		}
+    availableWidth -= col._calcWidth;
+  }); // http://www.freesoft.org/CIE/RFC/1942/18.htm
+  // http://www.w3.org/TR/CSS2/tables.html#width-layout
+  // http://dev.w3.org/csswg/css3-tables-algorithms/Overview.src.htm
 
-		availableWidth -= col._calcWidth;
-	});
+  var minW = autoMin + starMaxMin * starColumns.length;
+  var maxW = autoMax + starMaxMax * starColumns.length;
 
-	// http://www.freesoft.org/CIE/RFC/1942/18.htm
-	// http://www.w3.org/TR/CSS2/tables.html#width-layout
-	// http://dev.w3.org/csswg/css3-tables-algorithms/Overview.src.htm
-	let minW = autoMin + starMaxMin * starColumns.length;
-	let maxW = autoMax + starMaxMax * starColumns.length;
-	if (minW >= availableWidth) {
-		// case 1 - there's no way to fit all columns within available width
-		// that's actually pretty bad situation with PDF as we have no horizontal scroll
-		// no easy workaround (unless we decide, in the future, to split single words)
-		// currently we simply use minWidths for all columns
-		autoColumns.forEach(col => {
-			col._calcWidth = col._minWidth;
-		});
+  if (minW >= availableWidth) {
+    // case 1 - there's no way to fit all columns within available width
+    // that's actually pretty bad situation with PDF as we have no horizontal scroll
+    // no easy workaround (unless we decide, in the future, to split single words)
+    // currently we simply use minWidths for all columns
+    autoColumns.forEach(function (col) {
+      col._calcWidth = col._minWidth;
+    });
+    starColumns.forEach(function (col) {
+      col._calcWidth = starMaxMin; // starMaxMin already contains padding
+    });
+  } else {
+    if (maxW < availableWidth) {
+      // case 2 - we can fit rest of the table within available space
+      autoColumns.forEach(function (col) {
+        col._calcWidth = col._maxWidth;
+        availableWidth -= col._calcWidth;
+      });
+    } else {
+      // maxW is too large, but minW fits within available width
+      var W = availableWidth - minW;
+      var D = maxW - minW;
+      autoColumns.forEach(function (col) {
+        var d = col._maxWidth - col._minWidth;
+        col._calcWidth = col._minWidth + d * W / D;
+        availableWidth -= col._calcWidth;
+      });
+    }
 
-		starColumns.forEach(col => {
-			col._calcWidth = starMaxMin; // starMaxMin already contains padding
-		});
-	} else {
-		if (maxW < availableWidth) {
-			// case 2 - we can fit rest of the table within available space
-			autoColumns.forEach(col => {
-				col._calcWidth = col._maxWidth;
-				availableWidth -= col._calcWidth;
-			});
-		} else {
-			// maxW is too large, but minW fits within available width
-			let W = availableWidth - minW;
-			let D = maxW - minW;
+    if (starColumns.length > 0) {
+      var starSize = availableWidth / starColumns.length;
+      starColumns.forEach(function (col) {
+        col._calcWidth = starSize;
+      });
+    }
+  }
+}
 
-			autoColumns.forEach(col => {
-				let d = col._maxWidth - col._minWidth;
-				col._calcWidth = col._minWidth + d * W / D;
-				availableWidth -= col._calcWidth;
-			});
-		}
-
-		if (starColumns.length > 0) {
-			let starSize = availableWidth / starColumns.length;
-
-			starColumns.forEach(col => {
-				col._calcWidth = starSize;
-			});
-		}
-	}
+function isStarAutoColumn(column){
+	return column.width === null || column.width === undefined || column.width === '%';
 }
 
 function isAutoColumn(column) {
