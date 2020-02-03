@@ -5,8 +5,8 @@ import PageElementWriter from './PageElementWriter';
 import ColumnCalculator from './columnCalculator';
 import TableProcessor from './TableProcessor';
 import Line from './Line';
-import { isString, isArray, isFunction } from './helpers/variableType';
-import { stringifyNode } from './helpers/node';
+import { isString, isArray, isFunction, isValue } from './helpers/variableType';
+import { stringifyNode, getNodeId } from './helpers/node';
 import { pack, offsetVector } from './helpers/tools';
 import TextInlines from './TextInlines';
 import StyleContextStack from './StyleContextStack';
@@ -23,12 +23,14 @@ function addAll(target, otherArray) {
  */
 class LayoutBuilder {
 	/**
-	 * @param {Object} pageSize - an object defining page width and height
-	 * @param {Object} pageMargins - an object defining top, left, right and bottom margins
+	 * @param {object} pageSize - an object defining page width and height
+	 * @param {object} pageMargins - an object defining top, left, right and bottom margins
+	 * @param {object} svgMeasure
 	 */
-	constructor(pageSize, pageMargins) {
+	constructor(pageSize, pageMargins, svgMeasure) {
 		this.pageSize = pageSize;
 		this.pageMargins = pageMargins;
+		this.svgMeasure = svgMeasure;
 		this.tableLayouts = {};
 	}
 
@@ -40,11 +42,16 @@ class LayoutBuilder {
 	 * Executes layout engine on document-definition-object and creates an array of pages
 	 * containing positioned Blocks, Lines and inlines
 	 *
-	 * @param {Object} docStructure document-definition-object
-	 * @param {Object} pdfDocument pdfkit document
-	 * @param {Object} styleDictionary dictionary with style definitions
-	 * @param {Object} defaultStyle default style definition
-	 * @return {Array} an array of pages
+	 * @param {object} docStructure document-definition-object
+	 * @param {object} pdfDocument pdfkit document
+	 * @param {object} styleDictionary dictionary with style definitions
+	 * @param {object} defaultStyle default style definition
+	 * @param {object} background
+	 * @param {object} header
+	 * @param {object} footer
+	 * @param {object} watermark
+	 * @param {object} pageBreakBeforeFct
+	 * @returns {Array} an array of pages
 	 */
 	layoutDocument(
 		docStructure,
@@ -69,7 +76,7 @@ class LayoutBuilder {
 			linearNodeList.forEach(node => {
 				let nodeInfo = {};
 				[
-					'id', 'text', 'ul', 'ol', 'table', 'image', 'qr', 'canvas', 'columns',
+					'id', 'text', 'ul', 'ol', 'table', 'image', 'qr', 'canvas', 'svg', 'columns',
 					'headlineLevel', 'style', 'pageBreak', 'pageOrientation',
 					'width', 'height'
 				].forEach(key => {
@@ -107,7 +114,7 @@ class LayoutBuilder {
 		}
 
 		this.docPreprocessor = new DocPreprocessor();
-		this.docMeasure = new DocMeasure(pdfDocument, styleDictionary, defaultStyle, this.tableLayouts);
+		this.docMeasure = new DocMeasure(pdfDocument, styleDictionary, defaultStyle, this.svgMeasure, this.tableLayouts);
 
 		function resetXYs(result) {
 			result.linearNodeList.forEach(node => {
@@ -234,31 +241,55 @@ class LayoutBuilder {
 		}
 
 		watermark.font = watermark.font || defaultStyle.font || 'Roboto';
+		watermark.fontSize = watermark.fontSize || 'auto';
 		watermark.color = watermark.color || 'black';
 		watermark.opacity = watermark.opacity || 0.6;
 		watermark.bold = watermark.bold || false;
 		watermark.italics = watermark.italics || false;
+		watermark.angle = isValue(watermark.angle) ? watermark.angle : null;
+
+		if (watermark.angle === null) {
+			watermark.angle = Math.atan2(this.pageSize.height, this.pageSize.width) * -180 / Math.PI;
+		}
+
+		if (watermark.fontSize === 'auto') {
+			watermark.fontSize = getWatermarkFontSize(this.pageSize, watermark, pdfDocument);
+		}
 
 		let watermarkObject = {
 			text: watermark.text,
 			font: pdfDocument.provideFont(watermark.font, watermark.bold, watermark.italics),
-			size: getSize(this.pageSize, watermark, pdfDocument),
+			fontSize: watermark.fontSize,
 			color: watermark.color,
-			opacity: watermark.opacity
+			opacity: watermark.opacity,
+			angle: watermark.angle
 		};
+
+		watermarkObject._size = getWatermarkSize(watermark, pdfDocument);
 
 		let pages = this.writer.context().pages;
 		for (let i = 0, l = pages.length; i < l; i++) {
 			pages[i].watermark = watermarkObject;
 		}
 
-		function getSize(pageSize, watermark, pdfDocument) {
-			let width = pageSize.width;
-			let height = pageSize.height;
-			let targetWidth = Math.sqrt(width * width + height * height) * 0.8; /* page diagonal * sample factor */
+		function getWatermarkSize(watermark, pdfDocument) {
 			let textInlines = new TextInlines(pdfDocument);
 			let styleContextStack = new StyleContextStack(null, { font: watermark.font, bold: watermark.bold, italics: watermark.italics });
-			let size;
+
+			styleContextStack.push({
+				fontSize: watermark.fontSize
+			});
+
+			let size = textInlines.sizeOfText(watermark.text, styleContextStack);
+			let rotatedSize = textInlines.sizeOfRotatedText(watermark.text, watermark.angle, styleContextStack);
+
+			return { size: size, rotatedSize: rotatedSize };
+		}
+
+		function getWatermarkFontSize(pageSize, watermark, pdfDocument) {
+			let textInlines = new TextInlines(pdfDocument);
+			let styleContextStack = new StyleContextStack(null, { font: watermark.font, bold: watermark.bold, italics: watermark.italics });
+			let rotatedSize;
 
 			/**
 			 * Binary search the best font size.
@@ -272,20 +303,26 @@ class LayoutBuilder {
 				styleContextStack.push({
 					fontSize: c
 				});
-				size = textInlines.sizeOfText(watermark.text, styleContextStack);
-				if (size.width > targetWidth) {
+				rotatedSize = textInlines.sizeOfRotatedText(watermark.text, watermark.angle, styleContextStack);
+
+				if (rotatedSize.width > pageSize.width) {
 					b = c;
 					c = (a + b) / 2;
-				} else if (size.width < targetWidth) {
-					a = c;
-					c = (a + b) / 2;
+				} else if (rotatedSize.width < pageSize.width) {
+					if (rotatedSize.height > pageSize.height) {
+						b = c;
+						c = (a + b) / 2;
+					} else {
+						a = c;
+						c = (a + b) / 2;
+					}
 				}
 				styleContextStack.pop();
 			}
 			/*
 			 End binary search
 			 */
-			return { size: size, fontSize: c };
+			return c;
 		}
 	}
 
@@ -295,6 +332,16 @@ class LayoutBuilder {
 
 			if (node.pageBreak === 'before') {
 				this.writer.moveToNextPage(node.pageOrientation);
+			} else if (node.pageBreak === 'beforeOdd') {
+				this.writer.moveToNextPage(node.pageOrientation);
+				if ((this.writer.context().page + 1) % 2 === 1) {
+					this.writer.moveToNextPage(node.pageOrientation);
+				}
+			} else if (node.pageBreak === 'beforeEven') {
+				this.writer.moveToNextPage(node.pageOrientation);
+				if ((this.writer.context().page + 1) % 2 === 0) {
+					this.writer.moveToNextPage(node.pageOrientation);
+				}
 			}
 
 			if (margin) {
@@ -311,6 +358,16 @@ class LayoutBuilder {
 
 			if (node.pageBreak === 'after') {
 				this.writer.moveToNextPage(node.pageOrientation);
+			} else if (node.pageBreak === 'afterOdd') {
+				this.writer.moveToNextPage(node.pageOrientation);
+				if ((this.writer.context().page + 1) % 2 === 1) {
+					this.writer.moveToNextPage(node.pageOrientation);
+				}
+			} else if (node.pageBreak === 'afterEven') {
+				this.writer.moveToNextPage(node.pageOrientation);
+				if ((this.writer.context().page + 1) % 2 === 0) {
+					this.writer.moveToNextPage(node.pageOrientation);
+				}
 			}
 		};
 
@@ -332,7 +389,7 @@ class LayoutBuilder {
 			let relPosition = node.relativePosition;
 			if (relPosition) {
 				this.writer.context().beginDetachedBlock();
-				this.writer.context().moveTo((relPosition.x || 0) + this.writer.context().x, (relPosition.y || 0) + this.writer.context().y);
+				this.writer.context().moveToRelative(relPosition.x || 0, relPosition.y || 0);
 			}
 
 			if (node.stack) {
@@ -351,6 +408,8 @@ class LayoutBuilder {
 				this.processToc(node);
 			} else if (node.image) {
 				this.processImage(node);
+			} else if (node.svg) {
+				this.processSVG(node);
 			} else if (node.canvas) {
 				this.processCanvas(node);
 			} else if (node.qr) {
@@ -564,8 +623,18 @@ class LayoutBuilder {
 	// leafs (texts)
 	processLeaf(node) {
 		let line = this.buildNextLine(node);
+		if (line && (node.tocItem || node.id)) {
+			line._node = node;
+		}
 		let currentHeight = (line) ? line.getHeight() : 0;
 		let maxHeight = node.maxHeight || -1;
+
+		if (line) {
+			let nodeId = getNodeId(node);
+			if (nodeId) {
+				line.id = nodeId;
+			}
+		}
 
 		if (node._tocItemRef) {
 			line._pageNodeRef = node._tocItemRef;
@@ -601,7 +670,9 @@ class LayoutBuilder {
 		if (node.toc.title) {
 			this.processNode(node.toc.title);
 		}
-		this.processNode(node.toc._table);
+		if (node.toc._table) {
+			this.processNode(node.toc._table);
+		}
 	}
 
 	buildNextLine(textNode) {
@@ -667,6 +738,11 @@ class LayoutBuilder {
 	processCanvas(node) {
 		let positions = this.writer.addCanvas(node);
 		addAll(node.positions, positions);
+	}
+
+	processSVG(node) {
+		let position = this.writer.addSVG(node);
+		node.positions.push(position);
 	}
 
 	processQr(node) {

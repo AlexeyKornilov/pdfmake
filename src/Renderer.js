@@ -1,6 +1,28 @@
 import TextDecorator from './TextDecorator';
 import TextInlines from './TextInlines';
-import { isUndefined } from './helpers/variableType';
+
+var getSvgToPDF = function () {
+	try {
+		// optional dependency to support svg nodes
+		return require('svg-to-pdfkit');
+	} catch (e) {
+		throw new Error('Please install svg-to-pdfkit to enable svg nodes');
+	}
+};
+
+const findFont = (fonts, requiredFonts, defaultFont) => {
+	for (let i = 0; i < requiredFonts.length; i++) {
+		let requiredFont = requiredFonts[i].toLowerCase();
+
+		for (let font in fonts) {
+			if (font.toLowerCase() === requiredFont) {
+				return font;
+			}
+		}
+	}
+
+	return defaultFont;
+};
 
 class Renderer {
 	constructor(pdfDocument, progressCallback) {
@@ -40,6 +62,9 @@ class Renderer {
 					case 'image':
 						this.renderImage(item.item);
 						break;
+					case 'svg':
+						this.renderSVG(item.item);
+						break;
 					case 'beginClip':
 						this.beginClip(item.item);
 						break;
@@ -64,14 +89,13 @@ class Renderer {
 			let diffWidth;
 			let textInlines = new TextInlines(null);
 
-			if (isUndefined(_pageNodeRef.positions)) {
+			if (_pageNodeRef.positions === undefined) {
 				throw new Error('Page reference id not found');
 			}
 
 			let pageNumber = _pageNodeRef.positions[0].pageNumber.toString();
 
 			inline.text = pageNumber;
-			inline.linkToPage = pageNumber;
 			newWidth = textInlines.widthOfText(inline.text, inline);
 			diffWidth = inline.width - newWidth;
 			inline.width = newWidth;
@@ -102,6 +126,7 @@ class Renderer {
 		textDecorator.drawBackground(line, x, y);
 
 		//TODO: line.optimizeInlines();
+		//TOOD: lines without differently styled inlines should be written to pdf as one stream
 		for (let i = 0, l = line.inlines.length; i < l; i++) {
 			let inline = line.inlines[i];
 			let shiftToBaseline = lineHeight - ((inline.font.ascender / 1000) * inline.fontSize) - descent;
@@ -117,6 +142,14 @@ class Renderer {
 				wordCount: 1,
 				link: inline.link
 			};
+
+			if (inline.linkToDestination) {
+				options.goTo = inline.linkToDestination;
+			}
+
+			if (line.id && i === 0) {
+				options.destination = line.id;
+			}
 
 			if (inline.fontFeatures) {
 				options.features = inline.fontFeatures;
@@ -152,9 +185,15 @@ class Renderer {
 
 		//TODO: clipping
 
+		let gradient = null;
+
 		switch (vector.type) {
 			case 'ellipse':
 				this.pdfDocument.ellipse(vector.x, vector.y, vector.r1, vector.r2);
+
+				if (vector.linearGradient) {
+					gradient = this.pdfDocument.linearGradient(vector.x - vector.r1, vector.y, vector.x + vector.r1, vector.y);
+				}
 				break;
 			case 'rect':
 				if (vector.r) {
@@ -164,14 +203,7 @@ class Renderer {
 				}
 
 				if (vector.linearGradient) {
-					let gradient = this.pdfDocument.linearGradient(vector.x, vector.y, vector.x + vector.w, vector.y);
-					let step = 1 / (vector.linearGradient.length - 1);
-
-					for (let i = 0; i < vector.linearGradient.length; i++) {
-						gradient.stop(i * step, vector.linearGradient[i]);
-					}
-
-					vector.color = gradient;
+					gradient = this.pdfDocument.linearGradient(vector.x, vector.y, vector.x + vector.w, vector.y);
 				}
 				break;
 			case 'line':
@@ -202,6 +234,16 @@ class Renderer {
 				break;
 		}
 
+		if (vector.linearGradient && gradient) {
+			let step = 1 / (vector.linearGradient.length - 1);
+
+			for (let i = 0; i < vector.linearGradient.length; i++) {
+				gradient.stop(i * step, vector.linearGradient[i]);
+			}
+
+			vector.color = gradient;
+		}
+
 		if (vector.color && vector.lineColor) {
 			this.pdfDocument.fillColor(vector.color, vector.fillOpacity || 1);
 			this.pdfDocument.strokeColor(vector.lineColor, vector.strokeOpacity || 1);
@@ -223,6 +265,24 @@ class Renderer {
 		}
 	}
 
+	renderSVG(svg) {
+		let options = Object.assign({ width: svg._width, height: svg._height, assumePt: true }, svg.options);
+		options.fontCallback = (family, bold, italic) => {
+			let fontsFamily = family.split(',').map(f => f.trim().replace(/('|")/g, ''));
+			let font = findFont(this.pdfDocument.fonts, fontsFamily, svg.font || 'Roboto');
+
+			let fontFile = this.pdfDocument.getFontFile(font, bold, italic);
+			if (fontFile === null) {
+				let type = this.pdfDocument.getFontType(bold, italic);
+				throw new Error(`Font '${font}' in style '${type}' is not defined in the font section of the document definition.`);
+			}
+
+			return fontFile;
+		};
+
+		getSvgToPDF()(this.pdfDocument, svg.svg, svg.x, svg.y, options);
+	}
+
 	beginClip(rect) {
 		this.pdfDocument.save();
 		this.pdfDocument.addContent(`${rect.x} ${rect.y} ${rect.width} ${rect.height} re`);
@@ -241,14 +301,13 @@ class Renderer {
 
 		this.pdfDocument.save();
 
-		let angle = Math.atan2(this.pdfDocument.page.height, this.pdfDocument.page.width) * -180 / Math.PI;
-		this.pdfDocument.rotate(angle, { origin: [this.pdfDocument.page.width / 2, this.pdfDocument.page.height / 2] });
+		this.pdfDocument.rotate(watermark.angle, { origin: [this.pdfDocument.page.width / 2, this.pdfDocument.page.height / 2] });
 
-		let x = this.pdfDocument.page.width / 2 - watermark.size.size.width / 2;
-		let y = this.pdfDocument.page.height / 2 - watermark.size.size.height / 4;
+		let x = this.pdfDocument.page.width / 2 - watermark._size.size.width / 2;
+		let y = this.pdfDocument.page.height / 2 - watermark._size.size.height / 2;
 
 		this.pdfDocument._font = watermark.font;
-		this.pdfDocument.fontSize(watermark.size.fontSize);
+		this.pdfDocument.fontSize(watermark.fontSize);
 		this.pdfDocument.text(watermark.text, x, y, { lineBreak: false });
 
 		this.pdfDocument.restore();

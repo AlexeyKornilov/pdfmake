@@ -10,17 +10,38 @@ function fontStringify(key, val) {
 /**
  * Convert node to readable string
  *
- * @param {Object} node
- * @return {string}
+ * @param {object} node
+ * @returns {string}
  */
 export function stringifyNode(node) {
 	return JSON.stringify(node, fontStringify);
 }
 
 /**
- * @param {Object} node
- * @param {StyleContextStack} styleStack
- * @return {array|null}
+ * @param {object} node
+ * @returns {?string}
+ */
+export function getNodeId(node) {
+	if (node.id) {
+		return node.id;
+	}
+
+	if (isArray(node.text)) {
+		for (let n of node.text) {
+			let nodeId = getNodeId(n);
+			if (nodeId) {
+				return nodeId;
+			}
+		}
+	}
+
+	return null;
+}
+
+/**
+ * @param {object} node
+ * @param {object} styleStack object is instance of PDFDocument
+ * @returns {?Array}
  */
 export function getNodeMargin(node, styleStack) {
 	function processSingleMargins(node, currentMargin) {

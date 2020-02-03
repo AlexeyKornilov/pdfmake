@@ -1,9 +1,10 @@
 import PDFDocument from './PDFDocument';
 import LayoutBuilder from './LayoutBuilder';
+import SVGMeasure from './SVGMeasure';
 import sizes from './standardPageSizes';
 import { tableLayouts } from './tableLayouts';
 import Renderer from './Renderer';
-import { isFunction, isString, isNumber, isBoolean, isArray } from './helpers/variableType';
+import { isFunction, isString, isNumber, isBoolean, isArray, isValue } from './helpers/variableType';
 
 /**
  * Printer which turns document definition into a pdf
@@ -23,7 +24,7 @@ import { isFunction, isString, isNumber, isBoolean, isArray } from './helpers/va
 class PdfPrinter {
 
 	/**
-	 * @param {Object} fontDescriptors font definition dictionary
+	 * @param {object} fontDescriptors font definition dictionary
 	 */
 	constructor(fontDescriptors) {
 		this.fontDescriptors = fontDescriptors;
@@ -33,49 +34,15 @@ class PdfPrinter {
 	 * Executes layout engine for the specified document and renders it into a pdfkit document
 	 * ready to be saved.
 	 *
-	 * @param {Object} docDefinition document definition
-	 * @param {Object} docDefinition.content an array describing the pdf structure (for more information take a look at the examples in the /examples folder)
-	 * @param {Object} [docDefinition.defaultStyle] default (implicit) style definition
-	 * @param {Object} [docDefinition.styles] dictionary defining all styles which can be used in the document
-	 * @param {Object} [docDefinition.pageSize] page size (pdfkit units, A4 dimensions by default)
-	 * @param {Number} docDefinition.pageSize.width width
-	 * @param {Number} docDefinition.pageSize.height height
-	 * @param {Object} [docDefinition.pageMargins] page margins (pdfkit units)
-	 * @param {Number} docDefinition.maxPagesNumber maximum number of pages to render
-	 *
-	 * @example
-	 *
-	 * var docDefinition = {
-	 * 	info: {
-	 *		title: 'awesome Document',
-	 *		author: 'john doe',
-	 *		subject: 'subject of document',
-	 *		keywords: 'keywords for document',
-	 * 	},
-	 *	content: [
-	 *		'First paragraph',
-	 *		'Second paragraph, this time a little bit longer',
-	 *		{ text: 'Third paragraph, slightly bigger font size', fontSize: 20 },
-	 *		{ text: 'Another paragraph using a named style', style: 'header' },
-	 *		{ text: ['playing with ', 'inlines' ] },
-	 *		{ text: ['and ', { text: 'restyling ', bold: true }, 'them'] },
-	 *	],
-	 *	styles: {
-	 *		header: { fontSize: 30, bold: true }
-	 *	}
-	 * }
-	 *
-	 * var pdfKitDoc = printer.createPdfKitDocument(docDefinition);
-	 *
-	 * pdfKitDoc.pipe(fs.createWriteStream('sample.pdf'));
-	 * pdfKitDoc.end();
-	 *
-	 * @return {Object} a pdfKit document object which can be saved or encode to data-url
+	 * @param {object} docDefinition
+	 * @param {object} options
+	 * @returns {object} a pdfKit document object which can be saved or encode to data-url
 	 */
 	createPdfKitDocument(docDefinition, options = {}) {
 		docDefinition.version = docDefinition.version || '1.3';
 		docDefinition.compress = isBoolean(docDefinition.compress) ? docDefinition.compress : true;
 		docDefinition.images = docDefinition.images || {};
+		docDefinition.pageMargins = isValue(docDefinition.pageMargins) ? docDefinition.pageMargins : 40;
 
 		let pageSize = fixPageSize(docDefinition.pageSize, docDefinition.pageOrientation);
 
@@ -86,14 +53,16 @@ class PdfPrinter {
 			userPassword: docDefinition.userPassword,
 			ownerPassword: docDefinition.ownerPassword,
 			permissions: docDefinition.permissions,
+			fontLayoutCache: isBoolean(options.fontLayoutCache) ? options.fontLayoutCache : true,
 			bufferPages: options.bufferPages || false,
-			autoFirstPage: false
+			autoFirstPage: false,
+			font: null
 		};
 
 		this.pdfKitDoc = new PDFDocument(this.fontDescriptors, docDefinition.images, pdfOptions);
 		setMetadata(docDefinition, this.pdfKitDoc);
 
-		const builder = new LayoutBuilder(pageSize, fixPageMargins(docDefinition.pageMargins || 40));
+		const builder = new LayoutBuilder(pageSize, fixPageMargins(docDefinition.pageMargins), new SVGMeasure());
 
 		builder.registerTableLayouts(tableLayouts);
 		if (options.tableLayouts) {
@@ -209,10 +178,6 @@ function fixPageSize(pageSize, pageOrientation) {
 }
 
 function fixPageMargins(margin) {
-	if (!margin) {
-		return null;
-	}
-
 	if (isNumber(margin)) {
 		margin = { left: margin, right: margin, top: margin, bottom: margin };
 	} else if (isArray(margin)) {

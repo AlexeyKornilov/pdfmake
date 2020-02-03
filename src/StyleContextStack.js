@@ -6,8 +6,8 @@ import { isString, isArray, isValue } from './helpers/variableType';
 class StyleContextStack {
 
 	/**
-	 * @param {Object} styleDictionary named styles dictionary
-	 * @param {Object} defaultStyle optional default style definition
+	 * @param {object} styleDictionary named styles dictionary
+	 * @param {object} defaultStyle optional default style definition
 	 */
 	constructor(styleDictionary, defaultStyle = {}) {
 		this.styleDictionary = styleDictionary;
@@ -17,7 +17,8 @@ class StyleContextStack {
 
 	/**
 	 * Creates cloned version of current stack
-	 * @return {StyleContextStack} current stack snapshot
+	 *
+	 * @returns {StyleContextStack} current stack snapshot
 	 */
 	clone() {
 		let stack = new StyleContextStack(this.styleDictionary, this.defaultStyle);
@@ -32,7 +33,7 @@ class StyleContextStack {
 	/**
 	 * Pushes style-name or style-overrides-object onto the stack for future evaluation
 	 *
-	 * @param {String|Object} styleNameOrOverride style-name (referring to styleDictionary) or
+	 * @param {string|object} styleNameOrOverride style-name (referring to styleDictionary) or
 	 *                                            a new dictionary defining overriding properties
 	 */
 	push(styleNameOrOverride) {
@@ -42,7 +43,7 @@ class StyleContextStack {
 	/**
 	 * Removes last style-name or style-overrides-object from the stack
 	 *
-	 * @param {Number} howMany optional number of elements to be popped (if not specified,
+	 * @param {number} howMany optional number of elements to be popped (if not specified,
 	 *                         one element will be removed from the stack)
 	 */
 	pop(howMany = 1) {
@@ -56,8 +57,8 @@ class StyleContextStack {
 	 * pushes those elements onto the stack for future evaluation and returns the number
 	 * of elements pushed, so they can be easily poped then.
 	 *
-	 * @param {Object} item - an object with optional style property and/or style overrides
-	 * @return the number of items pushed onto the stack
+	 * @param {object} item - an object with optional style property and/or style overrides
+	 * @returns {number} the number of items pushed onto the stack
 	 */
 	autopush(item) {
 		if (isString(item)) {
@@ -125,9 +126,9 @@ class StyleContextStack {
 	 * Automatically pushes elements onto the stack, using autopush based on item,
 	 * executes callback and then pops elements back. Returns value returned by callback
 	 *
-	 * @param  {Object} item - an object with optional style property and/or style overrides
-	 * @param  {Function} function to be called between autopush and pop
-	 * @return {Object} value returned by callback
+	 * @param  {object} item - an object with optional style property and/or style overrides
+	 * @param  {Function} callback to be called between autopush and pop
+	 * @returns {object} value returned by callback
 	 */
 	auto(item, callback) {
 		let pushedItems = this.autopush(item);
@@ -143,8 +144,8 @@ class StyleContextStack {
 	/**
 	 * Evaluates stack and returns value of a named property
 	 *
-	 * @param {String} property - property name
-	 * @return property value or null if not found
+	 * @param {string} property - property name
+	 * @returns {?any} property value or null if not found
 	 */
 	getProperty(property) {
 		if (this.styleOverrides) {
@@ -169,8 +170,8 @@ class StyleContextStack {
 	 * @param {object} item
 	 * @param {StyleContextStack} styleContextStack
 	 * @param {string} property
-	 * @param {mixed} defaultValue
-	 * @return {mixed}
+	 * @param {any} defaultValue
+	 * @returns {any}
 	 */
 	static getStyleProperty(item, styleContextStack, property, defaultValue) {
 		let value;
@@ -193,7 +194,7 @@ class StyleContextStack {
 	/**
 	 * @param {object} source
 	 * @param {object} destination
-	 * @return {object}
+	 * @returns {object}
 	 */
 	static copyStyle(source = {}, destination = {}) {
 		// TODO: default style to source

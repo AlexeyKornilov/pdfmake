@@ -1,4 +1,4 @@
-import { isString, isNumber, isBoolean, isArray, isUndefined, isValue, isEmptyObject } from './helpers/variableType';
+import { isString, isNumber, isBoolean, isArray, isValue, isEmptyObject } from './helpers/variableType';
 import { stringifyNode } from './helpers/node';
 
 const convertValueToString = value => {
@@ -49,6 +49,8 @@ class DocPreprocessor {
 			return this.preprocessToc(node);
 		} else if (node.image) {
 			return this.preprocessImage(node);
+		} else if (node.svg) {
+			return this.preprocessSVG(node);
 		} else if (node.canvas) {
 			return this.preprocessCanvas(node);
 		} else if (node.qr) {
@@ -131,6 +133,10 @@ class DocPreprocessor {
 					this.tocs[tocItemId] = { toc: { _items: [], _pseudo: true } };
 				}
 
+				if (!node.id) {
+					node.id = `toc-${tocItemId}-${this.tocs[tocItemId].toc._items.length}`;
+				}
+
 				let tocItemRef = {
 					_nodeRef: this._getNodeForNodeRef(node),
 					_textNodeRef: node
@@ -165,6 +171,7 @@ class DocPreprocessor {
 				};
 			}
 			node.text = '00000';
+			node.linkToDestination = node.pageReference;
 			node._pageRef = this.nodeReferences[node.pageReference];
 		}
 
@@ -174,6 +181,7 @@ class DocPreprocessor {
 			}
 
 			node.text = '';
+			node.linkToDestination = node.textReference;
 			node._textRef = this.nodeReferences[node.textReference];
 		}
 
@@ -220,13 +228,17 @@ class DocPreprocessor {
 	}
 
 	preprocessImage(node) {
-		if (!isUndefined(node.image.type) && !isUndefined(node.image.data) && (node.image.type === 'Buffer') && isArray(node.image.data)) {
+		if ((node.image.type !== undefined) && (node.image.data !== undefined) && (node.image.type === 'Buffer') && isArray(node.image.data)) {
 			node.image = Buffer.from(node.image.data);
 		}
 		return node;
 	}
 
 	preprocessCanvas(node) {
+		return node;
+	}
+
+	preprocessSVG(node) {
 		return node;
 	}
 

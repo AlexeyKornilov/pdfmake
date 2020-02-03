@@ -1,6 +1,6 @@
 class Line {
 	/**
-	 * @param {Number} maxWidth Maximum width this line can have
+	 * @param {number} maxWidth Maximum width this line can have
 	 */
 	constructor(maxWidth) {
 		this.maxWidth = maxWidth;
@@ -30,7 +30,7 @@ class Line {
 	}
 
 	/**
-	 * @return {number}
+	 * @returns {number}
 	 */
 	getHeight() {
 		let max = 0;
@@ -43,7 +43,7 @@ class Line {
 	}
 
 	/**
-	 * @return {number}
+	 * @returns {number}
 	 */
 	getAscenderHeight() {
 		let y = 0;
@@ -56,14 +56,14 @@ class Line {
 	}
 
 	/**
-	 * @return {number}
+	 * @returns {number}
 	 */
 	getWidth() {
 		return this.inlineWidths - this.leadingCut - this.trailingCut;
 	}
 
 	/**
-	 * @return {number}
+	 * @returns {number}
 	 */
 	getAvailableWidth() {
 		return this.maxWidth - this.getWidth();
@@ -71,7 +71,8 @@ class Line {
 
 	/**
 	 * @param {object} inline
-	 * @param {array} nextInlines
+	 * @param {Array} nextInlines
+	 * @returns {boolean}
 	 */
 	hasEnoughSpaceForInline(inline, nextInlines = []) {
 		if (this.inlines.length === 0) {

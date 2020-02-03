@@ -154,30 +154,51 @@ class TableProcessor {
 			let offset = lineWidth / 2;
 			let currentLine = null;
 			let body = this.tableNode.table.body;
+			let cellAbove;
+			let currentCell;
+			let rowCellAbove;
 
 			for (let i = 0, l = this.rowSpanData.length; i < l; i++) {
 				let data = this.rowSpanData[i];
 				let shouldDrawLine = !data.rowSpan;
+				let borderColor = null;
 
 				// draw only if the current cell requires a top border or the cell in the
 				// row above requires a bottom border
 				if (shouldDrawLine && i < l - 1) {
-					let topBorder = false;
-					let bottomBorder = false;
-
-					// the current cell
-					if (lineIndex < body.length) {
-						let cell = body[lineIndex][i];
-						topBorder = cell.border ? cell.border[1] : this.layout.defaultBorder;
-					}
+					var topBorder = false, bottomBorder = false, rowBottomBorder = false;
 
 					// the cell in the row above
 					if (lineIndex > 0) {
-						let cellAbove = body[lineIndex - 1][i];
+						cellAbove = body[lineIndex - 1][i];
 						bottomBorder = cellAbove.border ? cellAbove.border[3] : this.layout.defaultBorder;
+						if (bottomBorder && cellAbove.borderColor) {
+							borderColor = cellAbove.borderColor[3];
+						}
+					}
+
+					// the current cell
+					if (lineIndex < body.length) {
+						currentCell = body[lineIndex][i];
+						topBorder = currentCell.border ? currentCell.border[1] : this.layout.defaultBorder;
+						if (topBorder && borderColor == null && currentCell.borderColor) {
+							borderColor = currentCell.borderColor[1];
+						}
 					}
 
 					shouldDrawLine = topBorder || bottomBorder;
+				}
+
+				if (cellAbove && cellAbove._rowSpanCurrentOffset) {
+					rowCellAbove = body[lineIndex - 1 - cellAbove._rowSpanCurrentOffset][i];
+					rowBottomBorder = rowCellAbove && rowCellAbove.border ? rowCellAbove.border[3] : this.layout.defaultBorder;
+					if (rowBottomBorder && rowCellAbove && rowCellAbove.borderColor) {
+						borderColor = rowCellAbove.borderColor[3];
+					}
+				}
+
+				if (borderColor == null) {
+					borderColor = isFunction(this.layout.hLineColor) ? this.layout.hLineColor(lineIndex, this.tableNode, i) : this.layout.hLineColor;
 				}
 
 				if (!currentLine && shouldDrawLine) {
@@ -185,12 +206,30 @@ class TableProcessor {
 				}
 
 				if (shouldDrawLine) {
-					currentLine.width += (data.width || 0);
+					let colSpanIndex = 0;
+					if (rowCellAbove && rowCellAbove.colSpan && rowBottomBorder) {
+						while (rowCellAbove.colSpan > colSpanIndex) {
+							currentLine.width += (this.rowSpanData[i + colSpanIndex++].width || 0);
+						}
+						i += colSpanIndex - 1;
+					} else if (cellAbove && cellAbove.colSpan && bottomBorder) {
+						while (cellAbove.colSpan > colSpanIndex) {
+							currentLine.width += (this.rowSpanData[i + colSpanIndex++].width || 0);
+						}
+						i += colSpanIndex - 1;
+					} else if (currentCell && currentCell.colSpan && topBorder) {
+						while (currentCell.colSpan > colSpanIndex) {
+							currentLine.width += (this.rowSpanData[i + colSpanIndex++].width || 0);
+						}
+						i += colSpanIndex - 1;
+					} else {
+						currentLine.width += (this.rowSpanData[i].width || 0);
+					}
 				}
 
 				let y = (overrideY || 0) + offset;
 
-				if (!shouldDrawLine || i === l - 1) {
+				if (shouldDrawLine) {
 					if (currentLine && currentLine.width) {
 						writer.addVector({
 							type: 'line',
@@ -200,9 +239,13 @@ class TableProcessor {
 							y2: y,
 							lineWidth: lineWidth,
 							dash: dash,
-							lineColor: isFunction(this.layout.hLineColor) ? this.layout.hLineColor(lineIndex, this.tableNode) : this.layout.hLineColor
+							lineColor: borderColor
 						}, false, overrideY);
 						currentLine = null;
+						borderColor = null;
+						cellAbove = null;
+						currentCell = null;
+						rowCellAbove = null;
 					}
 				}
 			}
@@ -211,16 +254,64 @@ class TableProcessor {
 		}
 	}
 
-	drawVerticalLine(x, y0, y1, vLineIndex, writer) {
-		let width = this.layout.vLineWidth(vLineIndex, this.tableNode);
+	drawVerticalLine(x, y0, y1, vLineColIndex, writer, vLineRowIndex, beforeVLineColIndex) {
+		let width = this.layout.vLineWidth(vLineColIndex, this.tableNode);
 		if (width === 0) {
 			return;
 		}
-		let style = this.layout.vLineStyle(vLineIndex, this.tableNode);
+		let style = this.layout.vLineStyle(vLineColIndex, this.tableNode);
 		let dash;
 		if (style && style.dash) {
 			dash = style.dash;
 		}
+
+		let body = this.tableNode.table.body;
+		let cellBefore;
+		let currentCell;
+		let borderColor;
+
+		// the cell in the col before
+		if (vLineColIndex > 0) {
+			cellBefore = body[vLineRowIndex][beforeVLineColIndex];
+			if (cellBefore && cellBefore.borderColor) {
+				if (cellBefore.border ? cellBefore.border[2] : this.layout.defaultBorder) {
+					borderColor = cellBefore.borderColor[2];
+				}
+			}
+		}
+
+		// the current cell
+		if (borderColor == null && vLineColIndex < body.length) {
+			currentCell = body[vLineRowIndex][vLineColIndex];
+			if (currentCell && currentCell.borderColor) {
+				if (currentCell.border ? currentCell.border[0] : this.layout.defaultBorder) {
+					borderColor = currentCell.borderColor[0];
+				}
+			}
+		}
+
+		if (borderColor == null && cellBefore && cellBefore._rowSpanCurrentOffset) {
+			let rowCellBeforeAbove = body[vLineRowIndex - cellBefore._rowSpanCurrentOffset][beforeVLineColIndex];
+			if (rowCellBeforeAbove.borderColor) {
+				if (rowCellBeforeAbove.border ? rowCellBeforeAbove.border[2] : this.layout.defaultBorder) {
+					borderColor = rowCellBeforeAbove.borderColor[2];
+				}
+			}
+		}
+
+		if (borderColor == null && currentCell && currentCell._rowSpanCurrentOffset) {
+			let rowCurrentCellAbove = body[vLineRowIndex - currentCell._rowSpanCurrentOffset][vLineColIndex];
+			if (rowCurrentCellAbove.borderColor) {
+				if (rowCurrentCellAbove.border ? rowCurrentCellAbove.border[2] : this.layout.defaultBorder) {
+					borderColor = rowCurrentCellAbove.borderColor[2];
+				}
+			}
+		}
+
+		if (borderColor == null) {
+			borderColor = isFunction(this.layout.vLineColor) ? this.layout.vLineColor(vLineColIndex, this.tableNode, vLineRowIndex) : this.layout.vLineColor;
+		}
+
 		writer.addVector({
 			type: 'line',
 			x1: x + width / 2,
@@ -229,8 +320,11 @@ class TableProcessor {
 			y2: y1,
 			lineWidth: width,
 			dash: dash,
-			lineColor: isFunction(this.layout.vLineColor) ? this.layout.vLineColor(vLineIndex, this.tableNode) : this.layout.vLineColor
+			lineColor: borderColor
 		}, false, true);
+		cellBefore = null;
+		currentCell = null;
+		borderColor = null;
 	}
 
 	endTable(writer) {
@@ -331,12 +425,12 @@ class TableProcessor {
 
 				// after cell
 				if (colIndex + 1 < body[rowIndex].length && !rightCellBorder) {
-					var cell = body[rowIndex][colIndex + 1];
+					let cell = body[rowIndex][colIndex + 1];
 					rightCellBorder = cell.border ? cell.border[0] : this.layout.defaultBorder;
 				}
 
 				if (leftCellBorder) {
-					this.drawVerticalLine(xs[i].x, y1 - hzLineOffset, y2 + this.bottomLineWidth, xs[i].index, writer);
+					this.drawVerticalLine(xs[i].x, y1 - hzLineOffset, y2 + this.bottomLineWidth, xs[i].index, writer, rowIndex, xs[i - 1] ? xs[i - 1].index : null);
 				}
 
 				if (i < l - 1) {
@@ -392,6 +486,13 @@ class TableProcessor {
 				if (row[i].colSpan && row[i].colSpan > 1) {
 					for (let j = 1; j < row[i].rowSpan; j++) {
 						this.tableNode.table.body[rowIndex + j][i]._colSpan = row[i].colSpan;
+					}
+				}
+
+				// fix rowSpans
+				if (row[i].rowSpan && row[i].rowSpan > 1) {
+					for (let j = 1; j < row[i].rowSpan; j++) {
+						this.tableNode.table.body[rowIndex + j][i]._rowSpanCurrentOffset = j;
 					}
 				}
 			}

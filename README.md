@@ -19,15 +19,11 @@
 [cndjs_url]: https://cdnjs.com/libraries/pdfmake
 
 
-Client/server side PDF printing in pure JavaScript
+PDF document generation library for server-side and client-side in pure JavaScript.
 
 Check out [the playground](http://bpampuch.github.io/pdfmake/playground.html) and [examples](https://github.com/bpampuch/pdfmake/tree/master/examples).
 
 #### This is unstable master branch for version 0.2.x, for stable version 0.1.x see [branch 0.1](https://github.com/bpampuch/pdfmake/tree/0.1).
-
-### New documentation: https://pdfmake.github.io/docs/
-
-For discussion about new documentation use [issue #1238](https://github.com/bpampuch/pdfmake/issues/1238)
 
 ### Features
 

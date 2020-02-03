@@ -1,5 +1,5 @@
 /**
- * @param {mixed} variable
+ * @param {any} variable
  * @returns {boolean}
  */
 export function isString(variable) {
@@ -7,7 +7,7 @@ export function isString(variable) {
 }
 
 /**
- * @param {mixed} variable
+ * @param {any} variable
  * @returns {boolean}
  */
 export function isNumber(variable) {
@@ -15,7 +15,7 @@ export function isNumber(variable) {
 }
 
 /**
- * @param {mixed} variable
+ * @param {any} variable
  * @returns {boolean}
  */
 export function isBoolean(variable) {
@@ -23,7 +23,7 @@ export function isBoolean(variable) {
 }
 
 /**
- * @param {mixed} variable
+ * @param {any} variable
  * @returns {boolean}
  */
 export function isArray(variable) {
@@ -31,7 +31,7 @@ export function isArray(variable) {
 }
 
 /**
- * @param {mixed} variable
+ * @param {any} variable
  * @returns {boolean}
  */
 export function isFunction(variable) {
@@ -39,15 +39,15 @@ export function isFunction(variable) {
 }
 
 /**
- * @param {mixed} variable
+ * @param {any} variable
  * @returns {boolean}
  */
 export function isObject(variable) {
-	return !isNull(variable) && !isArray(variable) && !isString(variable) && !isNumber(variable) && (typeof variable === 'object');
+	return (variable !== null) && !isArray(variable) && !isString(variable) && !isNumber(variable) && (typeof variable === 'object');
 }
 
 /**
- * @param {mixed} variable
+ * @param {any} variable
  * @returns {boolean}
  */
 export function isEmptyObject(variable) {
@@ -55,25 +55,9 @@ export function isEmptyObject(variable) {
 }
 
 /**
- * @param {mixed} variable
- * @returns {boolean}
- */
-export function isNull(variable) {
-	return variable === null;
-}
-
-/**
- * @param {mixed} variable
- * @returns {boolean}
- */
-export function isUndefined(variable) {
-	return variable === undefined;
-}
-
-/**
- * @param {mixed} variable
+ * @param {any} variable
  * @returns {boolean}
  */
 export function isValue(variable) {
-	return !isUndefined(variable) && !isNull(variable);
+	return (variable !== undefined) && (variable !== null);
 }

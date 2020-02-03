@@ -42,7 +42,7 @@ module.exports = {
 								"@babel/preset-env",
 								{
 									targets: {
-										"ie": "10"
+										"ie": "11"
 									},
 									modules: false,
 									useBuiltIns: 'usage',
@@ -53,10 +53,24 @@ module.exports = {
 					}
 				}
 			},
+			// for fs don't use babel _interopDefault command
 			{
 				enforce: 'pre',
+				test: /pdfkit[/\\]js[/\\]/,
+				loader: StringReplacePlugin.replace({
+					replacements: [
+						{
+							pattern: "import fs from 'fs';",
+							replacement: function () {
+								return "var fs = require('fs');";
+							}
+						}
+					]
+				})
+			},
+			{
 				test: /\.js$/,
-				include: /(pdfkit|saslprep)/,
+				include: /(pdfkit|saslprep|unicode-trie|unicode-properties|dfa|linebreak|png-js)/,
 				use: {
 					loader: 'babel-loader',
 					options: {
@@ -65,57 +79,34 @@ module.exports = {
 								"@babel/preset-env",
 								{
 									targets: {
-										"ie": "10"
+										"ie": "11"
 									},
 									modules: false,
 									useBuiltIns: 'usage',
 									loose: true
 								}
 							]
-						]
+						],
+						plugins: ["@babel/plugin-transform-modules-commonjs"]
 					}
 				}
 			},
-			// Workaround for @babel/preset-env bug in useBuiltIns: 'usage' (always use import instead of require)
-			{
-				test: /\.js$/,
-				include: /saslprep/,
-				loader: StringReplacePlugin.replace({
-					replacements: [
-						{
-							pattern: /import "([\S]*)";/g,
-							replacement: function (match, p1) {
-								return 'require("' + p1 + '");';
-							}
-						}
-					]
-				})
-			},
 			{ test: /pdfMake.js$/, loader: 'expose-loader?pdfMake', include: [path.join(__dirname, './src/browser-extensions')] },
+			/* temporary bugfix for FileSaver: added hack for mobile device support, see https://github.com/bpampuch/pdfmake/issues/1664 */
+			/* waiting to merge and release PR https://github.com/eligrey/FileSaver.js/pull/533 */
 			{
-				test: /pdfkit[/\\]js[/\\]/, loader: StringReplacePlugin.replace({
+				test: /FileSaver.min.js$/, loader: StringReplacePlugin.replace({
 					replacements: [
 						{
-							pattern: 'return this.font(\'Helvetica\');',
+							pattern: '"download"in HTMLAnchorElement.prototype',
 							replacement: function () {
-								return '';
+								return '(typeof HTMLAnchorElement !== "undefined" && "download" in HTMLAnchorElement.prototype)';
 							}
 						}
 					]
 				})
 			},
-			{
-				test: /fontkit[/\\]index.js$/, loader: StringReplacePlugin.replace({
-					replacements: [
-						{
-							pattern: /fs\./g,
-							replacement: function () {
-								return 'require(\'fs\').';
-							}
-						}
-					]
-				})
-			},
+
 			{ enforce: 'post', test: /fontkit[/\\]index.js$/, loader: "transform-loader?brfs" },
 			{ enforce: 'post', test: /unicode-properties[/\\]index.js$/, loader: "transform-loader?brfs" },
 			{ enforce: 'post', test: /linebreak[/\\]src[/\\]linebreaker.js/, loader: "transform-loader?brfs" }
