@@ -4545,6 +4545,12 @@ EventEmitter.prototype._maxListeners = undefined;
 // added to it. This is a useful default which helps finding memory leaks.
 var defaultMaxListeners = 10;
 
+function checkListener(listener) {
+  if (typeof listener !== 'function') {
+    throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
+  }
+}
+
 Object.defineProperty(EventEmitter, 'defaultMaxListeners', {
   enumerable: true,
   get: function() {
@@ -4579,14 +4585,14 @@ EventEmitter.prototype.setMaxListeners = function setMaxListeners(n) {
   return this;
 };
 
-function $getMaxListeners(that) {
+function _getMaxListeners(that) {
   if (that._maxListeners === undefined)
     return EventEmitter.defaultMaxListeners;
   return that._maxListeners;
 }
 
 EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
-  return $getMaxListeners(this);
+  return _getMaxListeners(this);
 };
 
 EventEmitter.prototype.emit = function emit(type) {
@@ -4638,9 +4644,7 @@ function _addListener(target, type, listener, prepend) {
   var events;
   var existing;
 
-  if (typeof listener !== 'function') {
-    throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
-  }
+  checkListener(listener);
 
   events = target._events;
   if (events === undefined) {
@@ -4677,7 +4681,7 @@ function _addListener(target, type, listener, prepend) {
     }
 
     // Check for listener leak
-    m = $getMaxListeners(target);
+    m = _getMaxListeners(target);
     if (m > 0 && existing.length > m && !existing.warned) {
       existing.warned = true;
       // No error code for this since it is a Warning
@@ -4709,12 +4713,12 @@ EventEmitter.prototype.prependListener =
     };
 
 function onceWrapper() {
-  var args = [];
-  for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
   if (!this.fired) {
     this.target.removeListener(this.type, this.wrapFn);
     this.fired = true;
-    ReflectApply(this.listener, this.target, args);
+    if (arguments.length === 0)
+      return this.listener.call(this.target);
+    return this.listener.apply(this.target, arguments);
   }
 }
 
@@ -4727,18 +4731,14 @@ function _onceWrap(target, type, listener) {
 }
 
 EventEmitter.prototype.once = function once(type, listener) {
-  if (typeof listener !== 'function') {
-    throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
-  }
+  checkListener(listener);
   this.on(type, _onceWrap(this, type, listener));
   return this;
 };
 
 EventEmitter.prototype.prependOnceListener =
     function prependOnceListener(type, listener) {
-      if (typeof listener !== 'function') {
-        throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
-      }
+      checkListener(listener);
       this.prependListener(type, _onceWrap(this, type, listener));
       return this;
     };
@@ -4748,9 +4748,7 @@ EventEmitter.prototype.removeListener =
     function removeListener(type, listener) {
       var list, events, position, i, originalListener;
 
-      if (typeof listener !== 'function') {
-        throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
-      }
+      checkListener(listener);
 
       events = this._events;
       if (events === undefined)
@@ -5220,7 +5218,7 @@ var objectKeys = Object.keys || function (obj) {
 module.exports = Duplex;
 
 /*<replacement>*/
-var util = __webpack_require__(66);
+var util = Object.create(__webpack_require__(66));
 util.inherits = __webpack_require__(56);
 /*</replacement>*/
 
@@ -9658,7 +9656,7 @@ var Duplex;
 Writable.WritableState = WritableState;
 
 /*<replacement>*/
-var util = __webpack_require__(66);
+var util = Object.create(__webpack_require__(66));
 util.inherits = __webpack_require__(56);
 /*</replacement>*/
 
@@ -12855,7 +12853,7 @@ function _isUint8Array(obj) {
 /*</replacement>*/
 
 /*<replacement>*/
-var util = __webpack_require__(66);
+var util = Object.create(__webpack_require__(66));
 util.inherits = __webpack_require__(56);
 /*</replacement>*/
 
@@ -13972,7 +13970,7 @@ module.exports = Transform;
 var Duplex = __webpack_require__(42);
 
 /*<replacement>*/
-var util = __webpack_require__(66);
+var util = Object.create(__webpack_require__(66));
 util.inherits = __webpack_require__(56);
 /*</replacement>*/
 
@@ -26617,7 +26615,7 @@ module.exports = PassThrough;
 var Transform = __webpack_require__(175);
 
 /*<replacement>*/
-var util = __webpack_require__(66);
+var util = Object.create(__webpack_require__(66));
 util.inherits = __webpack_require__(56);
 /*</replacement>*/
 
@@ -52307,6 +52305,11 @@ module.exports = {
         "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя└┴┬├─┼╣║╚╔╩╦╠═╬┐░▒▓│┤№§╗╝┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
     },
 
+    "cp720": {
+        "type": "_sbcs",
+        "chars": "\x80\x81éâ\x84à\x86çêëèïî\x8d\x8e\x8f\x90\u0651\u0652ô¤ـûùءآأؤ£إئابةتثجحخدذرزسشص«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀ضطظعغفµقكلمنهوىي≡\u064b\u064c\u064d\u064e\u064f\u0650≈°∙·√ⁿ²■\u00a0"
+    },
+
     // Aliases of generated encodings.
     "ascii8bit": "ascii",
     "usascii": "ascii",
@@ -56225,6 +56228,9 @@ module.exports = function GetIntrinsic(name, allowMissing) {
 		if (value != null) {
 			if ($gOPD && (i + 1) >= parts.length) {
 				var desc = $gOPD(value, parts[i]);
+				if (!allowMissing && !(parts[i] in value)) {
+					throw new $TypeError('base intrinsic for ' + name + ' exists, but the property is not available.');
+				}
 				value = desc ? (desc.get || desc.value) : value[parts[i]];
 			} else {
 				value = value[parts[i]];
@@ -65306,6 +65312,8 @@ function buildColumnWidths(columns, availableWidth) {
   var starMaxMax = 0;
   var fixedColumns = [];
   var initial_availableWidth = availableWidth;
+  var starAutoColumns = [];
+  var starAutoColWidth = 0;
   columns.forEach(function (column) {
     if (isAutoColumn(column)) {
       autoColumns.push(column);
@@ -65315,9 +65323,16 @@ function buildColumnWidths(columns, availableWidth) {
       starColumns.push(column);
       starMaxMin = Math.max(starMaxMin, column._minWidth);
       starMaxMax = Math.max(starMaxMax, column._maxWidth);
+    } else if (isStarAutoColumn(column)) {
+      starAutoColumns.push(column);
     } else {
       fixedColumns.push(column);
     }
+
+    starAutoColWidth += column._minWidth;
+  });
+  starAutoColumns.forEach(function (column) {
+    column._calcWidth = initial_availableWidth * (column._minWidth / starAutoColWidth);
   });
   fixedColumns.forEach(function (col) {
     // width specified as %
@@ -65375,6 +65390,10 @@ function buildColumnWidths(columns, availableWidth) {
       });
     }
   }
+}
+
+function isStarAutoColumn(column) {
+  return column.width === null || column.width === undefined || column.width === '%';
 }
 
 function isAutoColumn(column) {
@@ -70212,9 +70231,7 @@ function () {
       assumePt: true
     }, svg.options);
 
-    options.fontCallback = function (family, bold, italic, fontOptions) {
-      fontOptions.fauxBold = bold;
-      fontOptions.fauxItalic = italic;
+    options.fontCallback = function (family, bold, italic) {
       var fontsFamily = family.split(',').map(function (f) {
         return f.trim().replace(/('|")/g, '');
       });
@@ -70331,6 +70348,7 @@ function () {
     docDefinition.version = docDefinition.version || '1.3';
     docDefinition.compress = Object(variableType["b" /* isBoolean */])(docDefinition.compress) ? docDefinition.compress : true;
     docDefinition.images = docDefinition.images || {};
+    docDefinition.pageMargins = Object(variableType["h" /* isValue */])(docDefinition.pageMargins) ? docDefinition.pageMargins : 40;
     var pageSize = fixPageSize(docDefinition.pageSize, docDefinition.pageOrientation);
     var pdfOptions = {
       size: [pageSize.width, pageSize.height],
@@ -70346,7 +70364,7 @@ function () {
     };
     this.pdfKitDoc = new PDFDocument["a" /* default */](this.fontDescriptors, docDefinition.images, pdfOptions);
     setMetadata(docDefinition, this.pdfKitDoc);
-    var builder = new src_LayoutBuilder(pageSize, fixPageMargins(docDefinition.pageMargins || 40), new src_SVGMeasure());
+    var builder = new src_LayoutBuilder(pageSize, fixPageMargins(docDefinition.pageMargins), new src_SVGMeasure());
     builder.registerTableLayouts(tableLayouts_tableLayouts);
 
     if (options.tableLayouts) {
@@ -70472,10 +70490,6 @@ function fixPageSize(pageSize, pageOrientation) {
 }
 
 function fixPageMargins(margin) {
-  if (!margin) {
-    return null;
-  }
-
   if (Object(variableType["e" /* isNumber */])(margin)) {
     margin = {
       left: margin,
